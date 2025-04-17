@@ -156,8 +156,8 @@ class FacebookUploader:
 
     def validate_token(self) -> bool:
         """Validate the Facebook access token"""
-        url = f"https://graph.facebook.com/{self.api_version}/me/accounts"
-        params = {'access_token': self.access_token}
+        url = f"https://graph.facebook.com/{self.api_version}/{self.page_id}/video_reels"
+        params = { 'since': 'today', 'access_token': self.access_token }
         try:
             response = self.session.get(url, params=params)
             return response.status_code == 200
@@ -427,7 +427,6 @@ def main():
         # Inisialisasi manager
         video_manager = VideoManager()
         scraper = DetikScraper()
-        uploader = FacebookUploader({})  # Inisialisasi dummy
         
         # Load Facebook pages configuration
         try:
@@ -504,6 +503,8 @@ def main():
                         
                         # Upload ke semua halaman
                         print("\nStarting upload to all pages...")
+                        # Use the first page config just to initialize the uploader
+                        uploader = FacebookUploader(fb_pages[0])
                         upload_results = uploader.upload_to_all_pages(
                             video_path,
                             description,
