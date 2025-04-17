@@ -1,0 +1,42 @@
+name: Detik Scraper
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Run hourly
+  workflow_dispatch:
+
+jobs:
+  scrape-and-upload:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4 yt-dlp
+        
+    - name: Create config files
+      run: |
+        mkdir -p downloaded_videos
+        echo '${{ secrets.FACEBOOK_PAGES_JSON }}' > facebook_pages.json
+        
+    - name: Run scraper
+      run: python 20detik_fixed.py
+      
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: scraper-logs
+        path: |
+          posted_videos.json
