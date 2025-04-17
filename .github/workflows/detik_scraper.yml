@@ -1,20 +1,21 @@
-name: Detik Scraper
+name: Detik Scraper to Facebook
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Run every hour
+    - cron: '0 * * * *'  # Run hourly at minute 0
   workflow_dispatch:
 
 jobs:
   scrape-and-upload:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4  # Updated to v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
     - name: Set up Python
-      uses: actions/setup-python@v5  # Updated to v5
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
         
@@ -26,22 +27,43 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install requests beautifulsoup4 yt-dlp
+        pip install requests beautifulsoup4 yt-dlp python-dotenv
         
     - name: Create config files
       run: |
         mkdir -p downloaded_videos
         echo '${{ secrets.FACEBOOK_PAGES_JSON }}' > facebook_pages.json
+        echo "BASE_URL=https://20.detik.com/detikupdate" > .env
+        
+    - name: Validate config
+      run: |
+        python -c "
+        import json, os;
+        try:
+            with open('facebook_pages.json') as f:
+                pages = json.load(f)
+                print(f'Config valid: {len(pages)} pages loaded')
+                for page in pages:
+                    print(f\"- {page['page_name']} (ID: {page['page_id']})\")
+        except Exception as e:
+            print(f'Config error: {str(e)}')
+            exit(1)
+        "
         
     - name: Run scraper
       run: python 20detik.py
-      
-    - name: Upload logs as artifact
+      env:
+        CHECK_INTERVAL: 3600
+        MAX_RETRIES: 3
+        UPLOAD_DELAY: 30
+        
+    - name: Upload logs
       if: always()
-      uses: actions/upload-artifact@v4  # Updated to v4
+      uses: actions/upload-artifact@v3
       with:
         name: scraper-logs
         path: |
           posted_videos.json
+          facebook_pages.json
           downloaded_videos/
-        retention-days: 1  # Only keep artifacts for 1 day to save space
+        retention-days: 1
