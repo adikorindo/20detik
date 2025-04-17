@@ -10,16 +10,16 @@ from datetime import datetime
 from urllib.parse import urljoin
 from typing import List, Dict, Optional
 
-# Configuration
+# Konfigurasi
 BASE_URL = "https://20.detik.com/detikupdate"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-CHECK_INTERVAL = 3600  # 1 hour
+CHECK_INTERVAL = 3600  # 1 jam
 DATA_FILE = "posted_videos.json"
 DOWNLOAD_DIR = "downloaded_videos"
 FB_PAGES_FILE = "facebook_pages.json"
 MAX_RETRIES = 3
+UPLOAD_DELAY = 30  # Delay antar upload ke page berbeda
 
-# Ensure download directory exists
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 class FacebookPageManager:
@@ -29,11 +29,22 @@ class FacebookPageManager:
         if not os.path.exists(FB_PAGES_FILE):
             raise FileNotFoundError(f"Facebook pages config file not found: {FB_PAGES_FILE}")
             
-        with open(FB_PAGES_FILE, 'r') as f:
-            pages = json.load(f)
-            if not isinstance(pages, list):
-                raise ValueError("Invalid Facebook pages config format - expected list")
-            return pages
+        try:
+            with open(FB_PAGES_FILE, 'r') as f:
+                pages = json.load(f)
+                if not isinstance(pages, list):
+                    raise ValueError("Invalid Facebook pages config format - expected list")
+                
+                # Validasi setiap page config
+                required_fields = ['page_id', 'access_token', 'page_name']
+                for page in pages:
+                    for field in required_fields:
+                        if field not in page:
+                            raise ValueError(f"Missing required field '{field}' in page config")
+                
+                return pages
+        except Exception as e:
+            raise Exception(f"Error loading Facebook pages config: {e}")
 
 class VideoManager:
     def __init__(self):
@@ -71,6 +82,16 @@ class VideoManager:
         if not self.is_video_posted(video_details['source_url']):
             self.posted_videos.append(video_details)
             self.save_posted_videos()
+
+    def clean_downloads(self):
+        """Remove all downloaded video files"""
+        for filename in os.listdir(DOWNLOAD_DIR):
+            file_path = os.path.join(DOWNLOAD_DIR, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(f"Error deleting file {filename}: {e}")
 
 class VideoProcessor:
     @staticmethod
@@ -120,6 +141,9 @@ class VideoProcessor:
         except subprocess.CalledProcessError as e:
             print(f"FFmpeg conversion failed: {e.stderr.decode()}")
             return None
+        except Exception as e:
+            print(f"Error in video conversion: {e}")
+            return None
 
 class FacebookUploader:
     def __init__(self, page_config: Dict):
@@ -128,17 +152,77 @@ class FacebookUploader:
         self.page_name = page_config["page_name"]
         self.api_version = "v20.0"
         self.session = requests.Session()
+        self.session.headers.update({'User-Agent': USER_AGENT})
 
-    def upload_video(self, video_path: str, description: str, is_reel: bool = False) -> Optional[str]:
-        """Upload video to Facebook (regular video or Reel)"""
+    def validate_token(self) -> bool:
+        """Validate the Facebook access token"""
+        url = f"https://graph.facebook.com/{self.api_version}/me/accounts"
+        params = {'access_token': self.access_token}
         try:
-            if is_reel:
-                return self._upload_reel(video_path, description)
-            else:
-                return self._upload_regular_video(video_path, description)
+            response = self.session.get(url, params=params)
+            return response.status_code == 200
         except Exception as e:
-            print(f"Upload error to {self.page_name}: {e}")
-            return None
+            print(f"Token validation error: {e}")
+            return False
+
+    def upload_to_all_pages(self, video_path: str, description: str, is_reel: bool = False) -> List[Dict]:
+        """Upload video to all configured pages"""
+        pages = FacebookPageManager.load_pages()
+        results = []
+        
+        for page in pages:
+            try:
+                print(f"\nPreparing upload to {page['page_name']}...")
+                
+                # Initialize uploader for this page
+                uploader = FacebookUploader(page)
+                
+                # Verify token
+                if not uploader.validate_token():
+                    print(f"Invalid token for {page['page_name']}")
+                    results.append({
+                        "page_name": page["page_name"],
+                        "status": "failed",
+                        "error": "Invalid access token"
+                    })
+                    continue
+                
+                # Upload based on video type
+                if is_reel:
+                    post_id = uploader._upload_reel(video_path, description)
+                else:
+                    post_id = uploader._upload_regular_video(video_path, description)
+                
+                if post_id:
+                    results.append({
+                        "page_name": page["page_name"],
+                        "post_id": post_id,
+                        "status": "success",
+                        "url": f"https://facebook.com/{post_id}"
+                    })
+                    print(f"Successfully uploaded to {page['page_name']}")
+                else:
+                    results.append({
+                        "page_name": page["page_name"],
+                        "status": "failed",
+                        "error": "Upload returned no post ID"
+                    })
+                
+                # Delay between page uploads
+                if page != pages[-1]:  # No delay after last upload
+                    print(f"Waiting {UPLOAD_DELAY} seconds before next upload...")
+                    time.sleep(UPLOAD_DELAY)
+                    
+            except Exception as e:
+                print(f"Error uploading to {page['page_name']}: {e}")
+                results.append({
+                    "page_name": page["page_name"],
+                    "status": "error",
+                    "error": str(e)
+                })
+                continue
+                
+        return results
 
     def _upload_reel(self, video_path: str, description: str) -> Optional[str]:
         """Upload a Reel to Facebook"""
@@ -150,6 +234,7 @@ class FacebookUploader:
         }
         
         try:
+            # Initialize upload
             init_response = self.session.post(init_url, data=init_data)
             init_response.raise_for_status()
             video_id = init_response.json().get('video_id')
@@ -186,11 +271,14 @@ class FacebookUploader:
             publish_response = self.session.post(init_url, data=publish_data)
             publish_response.raise_for_status()
             
-            print(f"Successfully uploaded Reel to {self.page_name}")
+            print(f"Reel successfully published to {self.page_name}")
             return video_id
             
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP Error uploading Reel: {e.response.text}")
+            return None
         except Exception as e:
-            print(f"Reel upload failed: {e}")
+            print(f"Error uploading Reel: {e}")
             return None
 
     def _upload_regular_video(self, video_path: str, description: str) -> Optional[str]:
@@ -210,17 +298,21 @@ class FacebookUploader:
                 response.raise_for_status()
                 
                 video_id = response.json().get('id')
-                print(f"Successfully uploaded video to {self.page_name}")
+                print(f"Regular video successfully uploaded to {self.page_name}")
                 return video_id
                 
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP Error uploading video: {e.response.text}")
+            return None
         except Exception as e:
-            print(f"Regular video upload failed: {e}")
+            print(f"Error uploading video: {e}")
             return None
 
 class DetikScraper:
     def __init__(self):
         self.headers = {"User-Agent": USER_AGENT}
         self.session = requests.Session()
+        self.session.headers.update({'User-Agent': USER_AGENT})
 
     def get_video_links(self) -> List[str]:
         """Get video links from Detik.com"""
@@ -231,13 +323,15 @@ class DetikScraper:
             soup = BeautifulSoup(response.text, 'html.parser')
             video_links = []
             
+            # Cari semua link video di halaman
             for article in soup.find_all("article", class_="list-content__item"):
                 if link := article.find("a", class_="block-link"):
                     if href := link.get("href"):
                         if "video" in href.lower():
-                            video_links.append(urljoin(BASE_URL, href))
+                            full_url = urljoin(BASE_URL, href)
+                            video_links.append(full_url)
             
-            return list(set(video_links))
+            return list(set(video_links))  # Hapus duplikat
         except Exception as e:
             print(f"Scraping error: {e}")
             return []
@@ -250,12 +344,16 @@ class DetikScraper:
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            title = (soup.find("h1", class_="detail__title") or soup.find("title")).get_text(strip=True)
+            # Ekstrak judul
+            title_element = soup.find("h1", class_="detail__title") or soup.find("title")
+            title = title_element.get_text(strip=True) if title_element else "No Title"
             
+            # Ekstrak deskripsi
             description = ""
             if desc_div := soup.find("div", class_="detail__body-text"):
                 description = desc_div.get_text(strip=True)
             
+            # Ekstrak durasi
             duration = 0
             if dur_elem := soup.find('div', class_='media__icon--top-right'):
                 dur_text = dur_elem.get_text(strip=True)
@@ -265,11 +363,13 @@ class DetikScraper:
                     parts = dur_text.split(':')
                     duration = int(parts[0])*60 + int(parts[1])
             
+            # Ekstrak keywords sebagai hashtags
             hashtags = ""
             if meta_keywords := soup.find("meta", {"name": "keywords"}):
                 keywords = [k.strip() for k in meta_keywords["content"].split(",")]
                 hashtags = " ".join(f"#{k.replace(' ', '')}" for k in keywords if k)
             
+            # Ekstrak URL video
             if not (video_url := self._extract_video_url(response.text)):
                 return None
             
@@ -288,21 +388,28 @@ class DetikScraper:
     def _extract_video_url(self, html_content: str) -> Optional[str]:
         """Extract video URL from page content"""
         try:
-            # Try JSON-LD first
+            # Coba ekstrak dari JSON-LD
             if script_ld := re.search(r'<script type="application/ld\+json">(.*?)</script>', html_content, re.DOTALL):
-                if json_data := json.loads(script_ld.group(1)):
+                try:
+                    json_data = json.loads(script_ld.group(1))
                     if json_data.get("@type") == "VideoObject":
                         return json_data.get("contentUrl")
+                except json.JSONDecodeError:
+                    pass
             
-            # Try other patterns
+            # Coba pola lainnya
             patterns = [
                 r'videoUrl\s*:\s*["\'](.*?\.m3u8[^"\']*)["\']',
-                r'<meta[^>]*content=["\'](https?://[^"\']*\.mp4[^"\']*)["\']'
+                r'<meta[^>]*content=["\'](https?://[^"\']*\.mp4[^"\']*)["\']',
+                r'src:\s*["\'](https?://[^"\']*\.mp4[^"\']*)["\']'
             ]
             
             for pattern in patterns:
                 if match := re.search(pattern, html_content, re.IGNORECASE):
-                    return match.group(1)
+                    url = match.group(1)
+                    if url.startswith('//'):
+                        url = 'https:' + url
+                    return url
             
             return None
         except Exception as e:
@@ -312,112 +419,125 @@ class DetikScraper:
 def main():
     """Main function to run the scraper and uploader"""
     try:
-        print("Starting Detik.com Scraper...")
-        print(f"Current time: {datetime.now()}")
+        print("\n" + "="*50)
+        print(f"Detik.com to Facebook Multi-Page Uploader")
+        print(f"Started at: {datetime.now()}")
+        print("="*50 + "\n")
+        
+        # Inisialisasi manager
+        video_manager = VideoManager()
+        scraper = DetikScraper()
+        uploader = FacebookUploader({})  # Inisialisasi dummy
         
         # Load Facebook pages configuration
         try:
             fb_pages = FacebookPageManager.load_pages()
             if not fb_pages:
                 raise Exception("No Facebook pages configured in facebook_pages.json")
+            
+            print(f"Loaded {len(fb_pages)} Facebook pages:")
+            for page in fb_pages:
+                print(f"- {page['page_name']} (ID: {page['page_id']})")
         except Exception as e:
             print(f"Error loading Facebook pages: {e}")
             return
 
-        video_manager = VideoManager()
-        scraper = DetikScraper()
-        
         while True:
             try:
                 print("\n" + "="*50)
                 print(f"[{datetime.now()}] Checking for new videos...")
                 
-                # Get video links
+                # Dapatkan link video
                 video_links = scraper.get_video_links()
                 if not video_links:
                     print("No videos found, waiting for next check...")
                     time.sleep(CHECK_INTERVAL)
                     continue
                 
+                print(f"Found {len(video_links)} video links")
+                
                 new_videos = 0
                 for link in video_links:
-                    if video_manager.is_video_posted(link):
-                        print(f"Skipping already posted video: {link}")
-                        continue
-                    
-                    print(f"\nProcessing new video: {link}")
-                    
-                    # Get video details
-                    details = scraper.get_video_details(link)
-                    if not details:
-                        print("Failed to get video details")
-                        continue
-                    
-                    print(f"Title: {details['title']}")
-                    print(f"Duration: {details['duration']} seconds")
-                    
-                    # Download video
-                    print("Downloading video...")
-                    original_path = VideoProcessor.download_video(details['source_url'])
-                    if not original_path:
-                        print("Failed to download video")
-                        continue
-                    
-                    # Process video based on duration
-                    is_reel = details['duration'] <= 60
-                    if is_reel:
-                        print("Converting to Reel format...")
-                        video_path = VideoProcessor.convert_to_reel_format(original_path)
-                        os.remove(original_path)
-                        if not video_path:
-                            continue
-                    else:
-                        video_path = original_path
-                    
-                    # Prepare description
-                    description = (
-                        f"{details['title']}\n\n"
-                        f"{details['description']}\n\n"
-                        f"{details['keywords']}\n\n"
-                        f"Sumber: {link}"
-                    )
-                    
-                    # Upload to all configured pages
-                    upload_results = []
-                    for page in fb_pages:
-                        try:
-                            print(f"\nUploading to {page['page_name']}...")
-                            uploader = FacebookUploader(page)
-                            post_id = uploader.upload_video(video_path, description, is_reel)
-                            
-                            if post_id:
-                                upload_results.append({
-                                    "page_id": page["page_id"],
-                                    "page_name": page["page_name"],
-                                    "post_id": post_id,
-                                    "is_reel": is_reel,
-                                    "timestamp": datetime.now().isoformat()
-                                })
-                                print(f"Successfully uploaded to {page['page_name']}")
-                                time.sleep(30)  # Delay between page uploads
-                            else:
-                                print(f"Failed to upload to {page['page_name']}")
-                        
-                        except Exception as e:
-                            print(f"Error uploading to {page['page_name']}: {e}")
-                            continue
-                    
-                    # Clean up and record results
-                    if upload_results:
-                        details["posted_to"] = upload_results
-                        video_manager.add_posted_video(details)
-                        new_videos += 1
-                        print(f"Successfully processed: {details['title']}")
-                    
                     try:
-                        os.remove(video_path)
+                        # Cek apakah video sudah diupload sebelumnya
+                        if video_manager.is_video_posted(link):
+                            print(f"\nSkipping already posted video: {link}")
+                            continue
+                        
+                        print(f"\nProcessing new video: {link}")
+                        
+                        # Dapatkan detail video
+                        details = scraper.get_video_details(link)
+                        if not details:
+                            print("Failed to get video details, skipping...")
+                            continue
+                        
+                        print(f"Title: {details['title']}")
+                        print(f"Duration: {details['duration']} seconds")
+                        
+                        # Download video
+                        print("Downloading video...")
+                        original_path = VideoProcessor.download_video(details['source_url'])
+                        if not original_path:
+                            print("Failed to download video, skipping...")
+                            continue
+                        
+                        # Tentukan jenis video (Reel atau regular)
+                        is_reel = details['duration'] <= 60
+                        if is_reel:
+                            print("Video is short (<= 60s), converting to Reel format...")
+                            video_path = VideoProcessor.convert_to_reel_format(original_path)
+                            os.remove(original_path)  # Hapus file original
+                            if not video_path:
+                                continue
+                        else:
+                            video_path = original_path
+                            print("Video is long (> 60s), uploading as regular video...")
+                        
+                        # Siapkan deskripsi
+                        description = (
+                            f"{details['title']}\n\n"
+                            f"{details['description']}\n\n"
+                            f"{details['keywords']}\n\n"
+                            f"Sumber: {link}"
+                        )
+                        
+                        # Upload ke semua halaman
+                        print("\nStarting upload to all pages...")
+                        upload_results = uploader.upload_to_all_pages(
+                            video_path,
+                            description,
+                            is_reel
+                        )
+                        
+                        # Catat hasil upload
+                        success_count = sum(1 for r in upload_results if r['status'] == 'success')
+                        if success_count > 0:
+                            details["posted_to"] = upload_results
+                            video_manager.add_posted_video(details)
+                            new_videos += 1
+                            print(f"\nSuccessfully uploaded to {success_count} page(s)")
+                        else:
+                            print("\nFailed to upload to all pages")
+                        
+                        # Hapus file video setelah upload
+                        try:
+                            os.remove(video_path)
+                            print("Cleaned up video file")
+                        except Exception as e:
+                            print(f"Error cleaning up video file: {e}")
+                        
+                        # Log hasil
+                        print("\nUpload results:")
+                        for result in upload_results:
+                            status = "✅" if result['status'] == 'success' else "❌"
+                            print(f"{status} {result['page_name']}: {result.get('url', 'Failed')}")
+                            if 'error' in result:
+                                print(f"   Error: {result['error']}")
+                    
                     except Exception as e:
-                        print(f"Error cleaning up video file: {e}")
+                        print(f"\nError processing video: {e}")
+                        continue
                 
                 print(f"\nCycle completed. {new_videos} new videos processed.")
                 print(f"Next check in {CHECK_INTERVAL//60} minutes...")
@@ -437,3 +557,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+                  
