@@ -31,7 +31,7 @@ jobs:
         echo '${{ secrets.FACEBOOK_PAGES_JSON }}' > facebook_pages.json
         
     - name: Run scraper
-      run: python 20detik_fixed.py
+      run: python 20detik.py
       
     - name: Upload logs
       if: always()
