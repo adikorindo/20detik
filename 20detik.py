@@ -495,10 +495,10 @@ def main():
                         
                         # Siapkan deskripsi
                         description = (
-                            f"{details['title']}\n\n"
+                            #f"{details['title']}\n\n"
                             f"{details['description']}\n\n"
-                            f"{details['keywords']}\n\n"
-                            f"Sumber: {link}"
+                            f"{details['keywords']}"
+                            #f"Sumber: {link}"
                         )
                         
                         # Upload ke semua halaman
