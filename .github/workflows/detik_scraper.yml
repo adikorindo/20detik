@@ -53,7 +53,7 @@ jobs:
     - name: Run scraper
       run: python 20detik.py
       env:
-        CHECK_INTERVAL: 3600
+        CHECK_INTERVAL: 7200
         MAX_RETRIES: 3
         UPLOAD_DELAY: 30
         
