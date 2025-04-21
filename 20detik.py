@@ -13,7 +13,7 @@ from typing import List, Dict, Optional
 # Konfigurasi
 BASE_URL = "https://20.detik.com/detikupdate"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-CHECK_INTERVAL = 3600  # 1 jam
+CHECK_INTERVAL = 7200  # 1 jam
 DATA_FILE = "posted_videos.json"
 DOWNLOAD_DIR = "downloaded_videos"
 FB_PAGES_FILE = "facebook_pages.json"
