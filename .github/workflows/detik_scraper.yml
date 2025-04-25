@@ -1,8 +1,8 @@
-name: Detik Scraper to Facebook
+name: Detik Scraper to Facebook (6AM-12AM WIB)
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Run hourly at minute 0
+    - cron: '*/30 * * * *'  # Run every 30 minutes
   workflow_dispatch:
 
 jobs:
@@ -49,13 +49,32 @@ jobs:
             print(f'Config error: {str(e)}')
             exit(1)
         "
+    
+    - name: Check WIB time (UTC+7)
+      id: check_time
+      run: |
+        CURRENT_HOUR_UTC=$(date -u +%H)
+        CURRENT_MINUTE_UTC=$(date -u +%M)
+        CURRENT_HOUR_WIB=$(( (10#$CURRENT_HOUR_UTC + 7) % 24 ))
+        echo "Current UTC: $CURRENT_HOUR_UTC:$CURRENT_MINUTE_UTC"
+        echo "Current WIB: $CURRENT_HOUR_WIB:$CURRENT_MINUTE_UTC"
+        if [ $CURRENT_HOUR_WIB -ge 6 ] && [ $CURRENT_HOUR_WIB -lt 24 ]; then
+          echo "within_window=true" >> $GITHUB_OUTPUT
+        else
+          echo "within_window=false" >> $GITHUB_OUTPUT
+        fi
         
     - name: Run scraper
+      if: steps.check_time.outputs.within_window == 'true'
       run: python 20detik.py
       env:
         CHECK_INTERVAL: 7200
         MAX_RETRIES: 3
         UPLOAD_DELAY: 30
+        
+    - name: Skip message (outside WIB hours)
+      if: steps.check_time.outputs.within_window == 'false'
+      run: echo "Skipping execution - outside of WIB operating hours (6AM-12AM)"
         
     - name: Upload logs
       if: always()
