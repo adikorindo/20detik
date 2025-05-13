@@ -453,7 +453,7 @@ class DetikScraper:
             return f"{summary}\n\n{random.choice(CTAS)}"
 
         try:
-            client = OpenAI(api_key=OPENAI_API_KEY)
+            client = openai.OpenAI(api_key=OPENAI_API_KEY)
             prompt = (
                 f"Rangkum teks berikut jadi maksimal {max_length} kata dengan gaya santai, kayak cerita ke temen. "
                 f"Pastikan terasa alami, manusiawi, dan masukkan kata kunci '{keywords}' secara natural untuk SEO. "
