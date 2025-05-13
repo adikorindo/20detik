@@ -1,88 +1,53 @@
-name: Detik Scraper to Facebook (6AM-12AM WIB)
+name: Run Detik Scraper and Uploader
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Run every 30 minutes
-  workflow_dispatch:
+    - cron: '0 */1 * * *'  # Jalankan setiap 4 jam
+  workflow_dispatch:  # Izinkan trigger manual
 
 jobs:
   scrape-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-        
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests beautifulsoup4 yt-dlp python-dotenv
-        
-    - name: Create config files
-      run: |
-        mkdir -p downloaded_videos
-        echo '${{ secrets.FACEBOOK_PAGES_JSON }}' > facebook_pages.json
-        echo "BASE_URL=https://20.detik.com/detikupdate" > .env
-        
-    - name: Validate config
-      run: |
-        python -c "
-        import json, os;
-        try:
-            with open('facebook_pages.json') as f:
-                pages = json.load(f)
-                print(f'Config valid: {len(pages)} pages loaded')
-                for page in pages:
-                    print(f\"- {page['page_name']} (ID: {page['page_id']})\")
-        except Exception as e:
-            print(f'Config error: {str(e)}')
-            exit(1)
-        "
-    
-    - name: Check WIB time (UTC+7)
-      id: check_time
-      run: |
-        CURRENT_HOUR_UTC=$(date -u +%H)
-        CURRENT_MINUTE_UTC=$(date -u +%M)
-        CURRENT_HOUR_WIB=$(( (10#$CURRENT_HOUR_UTC + 7) % 24 ))
-        echo "Current UTC: $CURRENT_HOUR_UTC:$CURRENT_MINUTE_UTC"
-        echo "Current WIB: $CURRENT_HOUR_WIB:$CURRENT_MINUTE_UTC"
-        if [ $CURRENT_HOUR_WIB -ge 6 ] && [ $CURRENT_HOUR_WIB -lt 24 ]; then
-          echo "within_window=true" >> $GITHUB_OUTPUT
-        else
-          echo "within_window=false" >> $GITHUB_OUTPUT
-        fi
-        
-    - name: Run scraper
-      if: steps.check_time.outputs.within_window == 'true'
-      run: python 20detik.py
-      env:
-        CHECK_INTERVAL: 7200
-        MAX_RETRIES: 3
-        UPLOAD_DELAY: 30
-        
-    - name: Skip message (outside WIB hours)
-      if: steps.check_time.outputs.within_window == 'false'
-      run: echo "Skipping execution - outside of WIB operating hours (6AM-12AM)"
-        
-    - name: Upload logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: scraper-logs
-        path: |
-          posted_videos.json
-          facebook_pages.json
-          downloaded_videos/
-        retention-days: 1
+      # Checkout kode dari repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      # Instal FFmpeg
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # Instal dependensi Python
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Simpan facebook_pages.json dari secret
+      - name: Create facebook_pages.json
+        env:
+          FB_PAGES_JSON: ${{ secrets.FB_PAGES_JSON }}
+        run: echo "$FB_PAGES_JSON" > facebook_pages.json
+
+      # Jalankan skrip
+      - name: Run Scraper and Uploader
+        env:
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+        run: python main.py
+
+      # Commit dan push posted_videos.json (jika ada perubahan)
+      - name: Commit Updated posted_videos.json
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add posted_videos.json
+          git diff --quiet && git diff --staged --quiet || git commit -m 'Update posted_videos.json'
+          git push
+        continue-on-error: true
