@@ -2,7 +2,7 @@
 # coding=utf-8
 #dev by @dafidxcode
 
-import os, sys, json, time, requests, re, subprocess, random, hashlib
+import os, sys, json, time, requests, re, subprocess, random, hashlib, openai
 from bs4 import BeautifulSoup
 from datetime import datetime
 from urllib.parse import urljoin
