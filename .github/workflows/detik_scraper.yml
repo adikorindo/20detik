@@ -33,7 +33,7 @@ jobs:
       # Simpan facebook_pages.json dari secret
       - name: Create facebook_pages.json
         env:
-          FB_PAGES_JSON: ${{ secrets.FB_PAGES_JSON }}
+          FB_PAGES_JSON: ${{ secrets.FACEBOOK_PAGES_JSON }}
         run: echo "$FB_PAGES_JSON" > facebook_pages.json
 
       # Jalankan skrip
