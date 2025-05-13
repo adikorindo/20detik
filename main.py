@@ -445,7 +445,7 @@ class DetikScraper:
             return None
 
     @staticmethod
-    def summarize_news(description: str, keywords: str, max_length: int = 150) -> str:
+    def summarize_news(description: str, keywords: str, max_length: int = 500) -> str:
         """Summarize news with a casual, SEO-friendly style using xAI API"""
         if not OPENAI_API_KEY:
             print("Warning: OPENAI_API_KEY not found, using fallback summary")
