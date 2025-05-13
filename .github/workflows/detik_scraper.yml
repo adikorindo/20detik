@@ -39,7 +39,7 @@ jobs:
       # Jalankan skrip
       - name: Run Scraper and Uploader
         env:
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python main.py
 
       # Commit dan push posted_videos.json (jika ada perubahan)
