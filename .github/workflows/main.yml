@@ -1,4 +1,4 @@
-name: Run Detik Scraper and Uploader
+name: Detik to Fanspage
 
 on:
   schedule:
