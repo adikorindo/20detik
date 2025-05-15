@@ -2,7 +2,7 @@ name: Detik Scraping And Uploader
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Jalankan setiap 4 jam
+    - cron: '0 */4 * * *'  # Jalankan setiap 4 jam
   workflow_dispatch:  # Izinkan trigger manual
 
 jobs:
