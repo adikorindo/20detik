@@ -453,7 +453,7 @@ class DetikScraper:
             return None
 
     @staticmethod
-    def summarize_news(description: str, keywords: str, max_length: int = 100) -> str:
+    def summarize_news(description: str, keywords: str, max_length: int = 150) -> str:
         """Summarize news with a casual, SEO-friendly style using xAI API"""
         if not OPENAI_API_KEY:
             print("Warning: OPENAI_API_KEY not found, using fallback summary")
@@ -463,10 +463,10 @@ class DetikScraper:
         try:
             client = openai.OpenAI(api_key=OPENAI_API_KEY)
             prompt = (
-                f"Rangkum teks berikut jadi maksimal {max_length} kata dengan gaya santai, kayak cerita ke temen. "
+                f"Rangkum teks berikut jadi maksimal {max_length} kata dengan gaya santai, kayak cerita ke temen tongkrongan. "
                 f"Pastikan terasa alami, manusiawi dan masukkan kata kunci '{keywords}' secara natural untuk SEO. "
                 f"Gunakan 1-2 emotikon relevan dan tambahkan CTA acak dari: {', '.join(CTAS)}. "
-                f"Buat teks pendek, maksimal 2-3 kalimat dan maksimal 1 paragraf. "
+                f"Buat teks pendek, maksimal 2-3 kalimat dalam 1 paragraf. "
                 f"Teks: {description}"
             )
 
