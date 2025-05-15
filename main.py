@@ -27,7 +27,15 @@ CTAS = [
     "Komen pendapatmu di bawah, ya! ",
     "Tag temen yang harus tahu! ",
     "Share ke grupmu, bro! ",
-    "Apa sih menurutmu? Tulis di kolom komen! "
+    "Apa sih menurutmu? Tulis di kolom komen! ",
+    "Setuju gak? Tulis di komentar! ",
+    "Jangan lupa share kalau bermanfaat! ",
+    "Temanmu harus lihat ini juga! ",
+    "Kira-kira kamu pilih yang mana? ",
+    "Tandai temen debat kamu di sini! ",
+    "Jangan cuma scroll, komen juga dong! ",
+    "Menurut kamu, gimana nih? ",
+    "Langsung aja drop pendapatmu! "
 ]
 
 class FacebookPageManager:
