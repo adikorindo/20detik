@@ -15,7 +15,7 @@ CHECK_INTERVAL = 14400  # 4 jam
 DATA_FILE = "posted_videos.json"
 DOWNLOAD_DIR = "downloaded_videos"
 FB_PAGES_FILE = "facebook_pages.json"
-MAX_UPLOADS_PER_CYCLE = 3  # Batas unggahan per siklus
+MAX_UPLOADS_PER_CYCLE = 5  # Batas unggahan per siklus
 UPLOAD_DELAY_MIN = 20  # Detik
 UPLOAD_DELAY_MAX = 40  # Detik
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -445,7 +445,7 @@ class DetikScraper:
             return None
 
     @staticmethod
-    def summarize_news(description: str, keywords: str, max_length: int = 150) -> str:
+    def summarize_news(description: str, keywords: str, max_length: int = 100) -> str:
         """Summarize news with a casual, SEO-friendly style using xAI API"""
         if not OPENAI_API_KEY:
             print("Warning: OPENAI_API_KEY not found, using fallback summary")
