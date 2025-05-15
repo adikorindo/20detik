@@ -1,8 +1,8 @@
-name: Detik to Fanspage
+name: Detik Scraping And Uploader
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Jalankan setiap 4 jam
+    - cron: '0 */2 * * *'  # Jalankan setiap 4 jam
   workflow_dispatch:  # Izinkan trigger manual
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
         run: echo "$FB_PAGES_JSON" > facebook_pages.json
 
       # Jalankan skrip
-      - name: Run Scraper and Uploader
+      - name: Detik Scraping And Uploader
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python main.py
