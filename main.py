@@ -16,8 +16,8 @@ DATA_FILE = "posted_videos.json"
 DOWNLOAD_DIR = "downloaded_videos"
 FB_PAGES_FILE = "facebook_pages.json"
 MAX_UPLOADS_PER_CYCLE = 5  # Batas unggahan per siklus
-UPLOAD_DELAY_MIN = 20  # Detik
-UPLOAD_DELAY_MAX = 40  # Detik
+UPLOAD_DELAY_MIN = 30  # Detik
+UPLOAD_DELAY_MAX = 150  # Detik
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -458,14 +458,14 @@ class DetikScraper:
         if not OPENAI_API_KEY:
             print("Warning: OPENAI_API_KEY not found, using fallback summary")
             summary = description[:max_length].strip() + "..."
-            return f"{summary}\n\n{random.choice(CTAS)}"
+            return f"{summary}"
 
         try:
             client = openai.OpenAI(api_key=OPENAI_API_KEY)
             prompt = (
                 f"Rangkum teks berikut jadi maksimal {max_length} kata dengan gaya santai, kayak cerita ke temen tongkrongan. "
                 f"Pastikan terasa alami, manusiawi dan masukkan kata kunci '{keywords}' secara natural untuk SEO. "
-                f"Gunakan 1-2 emotikon relevan dan tambahkan CTA acak dari: {', '.join(CTAS)}. "
+                f"Gunakan 1-2 emotikon relevan "
                 f"Buat teks pendek, maksimal 2-3 kalimat dalam 1 paragraf. "
                 f"Teks: {description}"
             )
@@ -485,7 +485,7 @@ class DetikScraper:
         except Exception as e:
             print(f"Error summarizing with OpenAI API: {e}")
             summary = description[:max_length].strip() + "..."
-            return f"{summary}\n\n{random.choice(CTAS)}"
+            return f"{summary}"
 
 def main():
     """Main function to run the scraper and uploader"""
